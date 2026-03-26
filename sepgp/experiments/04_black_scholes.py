@@ -12,8 +12,8 @@ Experiment 4: Black-Scholes Pipeline
 This is the second task from Brian's GUROP research with Prof. Raita.
 """
 
-import sys
-sys.path.insert(0, "/home/claude")
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import torch
 import matplotlib.pyplot as plt
@@ -260,6 +260,6 @@ plt.suptitle(
     fontsize=13,
 )
 plt.tight_layout()
-plt.savefig("/home/claude/black_scholes_results.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "black_scholes_results.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print("Saved: black_scholes_results.png")

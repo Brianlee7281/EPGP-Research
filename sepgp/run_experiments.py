@@ -7,7 +7,7 @@ Phase 2:  Black-Scholes Pipeline
 """
 
 import sys, os
-sys.path.insert(0, "/home/claude")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
 import matplotlib
@@ -113,7 +113,7 @@ ax.set_title("Learned σ² weights"); ax.set_xlabel("Basis index"); ax.set_ylabe
 ax.set_yscale("log")
 
 fig.suptitle("S-EPGP: 1D Heat Equation (data at t=0 only)", fontsize=14)
-plt.savefig("/home/claude/exp1_heat1d.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exp1_heat1d.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print("→ Saved exp1_heat1d.png\n")
 
@@ -196,7 +196,7 @@ print(f"Mean MSE across times: {mse_total/len(test_times):.2e}")
 
 fig.suptitle("S-EPGP: 2D Wave Equation (trained on t=0, 0.05 frames)", fontsize=13)
 plt.tight_layout()
-plt.savefig("/home/claude/exp2_wave2d.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exp2_wave2d.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print("→ Saved exp2_wave2d.png\n")
 
@@ -302,7 +302,7 @@ fig.suptitle(
     f"Overall MSE={overall_mse:.2e}",
     fontsize=13,
 )
-plt.savefig("/home/claude/exp3_black_scholes.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exp3_black_scholes.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print(f"Overall MSE across time slices: {overall_mse:.2e}")
 print("→ Saved exp3_black_scholes.png\n")

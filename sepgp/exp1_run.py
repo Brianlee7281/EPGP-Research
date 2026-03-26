@@ -1,8 +1,8 @@
 """
 Experiment 1: S-EPGP on 1D Heat Equation (fast version)
 """
-import sys
-sys.path.insert(0, "/home/claude")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -83,6 +83,6 @@ axes[1,2].set_title("Learned σ² weights"); axes[1,2].set_xlabel("Basis index")
 
 fig.suptitle("S-EPGP: 1D Heat Equation  u_t = u_xx  (data at t=0 only)", fontsize=14, fontweight="bold")
 plt.tight_layout()
-plt.savefig("/home/claude/exp1_heat1d.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exp1_heat1d.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print("Saved exp1_heat1d.png")

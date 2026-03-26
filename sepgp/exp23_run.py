@@ -1,8 +1,8 @@
 """
 Experiments 2 & 3: 2D Wave + Black-Scholes (fast, fixed hyperparams)
 """
-import sys
-sys.path.insert(0, "/home/claude")
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -94,7 +94,7 @@ for r in range(3):
 
 fig.suptitle("S-EPGP: 2D Wave Equation  (trained on t=0.0, 0.05 → extrapolating)", fontsize=14, fontweight="bold")
 plt.tight_layout()
-plt.savefig("/home/claude/exp2_wave2d.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exp2_wave2d.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print("→ Saved exp2_wave2d.png\n")
 
@@ -193,7 +193,7 @@ fig.suptitle(
     f"(σ={params.sigma}, r={params.r}, K={params.K} | Overall MSE={overall:.2e})",
     fontsize=14, fontweight="bold")
 plt.tight_layout()
-plt.savefig("/home/claude/exp3_black_scholes.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exp3_black_scholes.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print(f"\nOverall BS MSE: {overall:.2e}")
 print("→ Saved exp3_black_scholes.png")

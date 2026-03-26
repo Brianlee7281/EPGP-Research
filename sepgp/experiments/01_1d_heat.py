@@ -13,8 +13,8 @@ The analytical solution is:
 (Gaussian that spreads over time via heat kernel convolution.)
 """
 
-import sys
-sys.path.insert(0, "/home/claude")
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 import torch
 import matplotlib.pyplot as plt
@@ -190,6 +190,6 @@ axes[1, 2].set_ylabel("MLL")
 
 plt.suptitle("S-EPGP: 1D Heat Equation (training data at t=0 only)", fontsize=14)
 plt.tight_layout()
-plt.savefig("/home/claude/heat_1d_results.png", dpi=150, bbox_inches="tight")
+plt.savefig(os.path.join(os.path.dirname(os.path.abspath(__file__)), "heat_1d_results.png"), dpi=150, bbox_inches="tight")
 plt.close()
 print("\nSaved: heat_1d_results.png")
