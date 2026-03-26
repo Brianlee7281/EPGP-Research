@@ -244,6 +244,8 @@ where μᵢ and σᵢ are the expanding mean and standard deviation of feature i
 
 For the initial training window (first W observations), use the in-window mean and standard deviation.
 
+**Note on stationarity:** Expanding-window standardization prevents look-ahead bias but introduces non-stationarity: z-scores computed on 50 days of history have higher variance than those computed on 500 days. The HMM emission distributions are estimated from standardized features and will absorb this non-stationarity during training. However, for the live inference window, switch to a rolling 252-day window for standardization once at least 252 days of history are available (switch from expanding to rolling at t = 252). This provides stable z-score scales for real-time operation.
+
 ### 4.5 Handling Missing Data
 
 **VIX3M:** Available from CBOE starting ~2008. For earlier periods or gaps, approximate as VIX3M ≈ VIX × 1.05 (empirical long-run ratio). Flag approximated periods.
@@ -274,7 +276,7 @@ The Baum-Welch algorithm is sensitive to initialization. We use a multi-start ap
 2. Use K-means centroids as initial emission means μₖ⁰.
 3. Use within-cluster covariance as initial Σₖ⁰.
 4. Initialize transition matrix with diagonal dominance: aᵢᵢ = 0.95, aᵢⱼ = 0.05/(K-1) for i ≠ j. This encodes the prior that regimes are persistent (markets do not switch regime every day).
-5. Run Baum-Welch with n_init = 10 random perturbations of this K-means initialization.
+5. Run Baum-Welch with n_init = 10 random perturbations of this K-means initialization. For each of the 10 runs: perturb K-means means by adding Gaussian noise with std = 0.1 · std(feature_i) per feature dimension. Transition matrix is re-initialized with the same diagonal-dominant structure each time. Random seed for K-means is fixed at 42; Baum-Welch perturbation seeds are 0 through 9.
 6. Select the run with highest log-likelihood.
 
 ### 5.3 Covariance Type
@@ -364,17 +366,42 @@ After each retraining:
 
 ### 7.3 Stability Metric
 
-Define label stability as:
+Label stability uses two complementary checks:
 
-Stability(t) = (1/63) · Σᵢ₌₁⁶³ 𝟙[regime_new(t-i) = regime_old(t-i)]
+**Check 1 — Hard-label overlap (robustness screen):**
 
-where regime_new and regime_old are the regime assignments from the newly trained and previously trained HMMs respectively.
+Stability_label(t) = (1/63) · Σᵢ₌₁⁶³ 𝟙[regime_new(t-i) = regime_old(t-i)]
 
-**Threshold:** Stability ≥ 90%. If below 90%, the retraining produced a significantly different model. Possible causes:
+where regime_new and regime_old are the hard regime assignments (argmax of filtered posterior) from the newly trained and previously trained HMMs respectively.
+
+Threshold: Stability_label ≥ 90%.
+
+**Check 2 — Probabilistic overlap (sensitivity check):**
+
+For each of the last 63 days, compute the symmetric KL divergence between the new and old filtered posteriors:
+
+KL_sym(t) = ½ KL(P_new || P_old) + ½ KL(P_old || P_new)
+
+Mean_KL = (1/63) · Σᵢ₌₁⁶³ KL_sym(t-i)
+
+Threshold: Mean_KL < 0.3 nats (approximately equivalent to 90% label overlap for well-separated posteriors, but more sensitive to near-boundary flips).
+
+**Decision rule:** Both checks must pass for a clean model switch. If either fails, trigger the warm-start retry. If Check 1 passes but Check 2 fails, the model is mathematically different even if labels appear the same — treat as unstable.
+
+Possible causes of instability:
 - New data includes a novel regime observation not present in the previous training set.
 - EM converged to a different local optimum.
 
-Action: if Stability < 90%, keep the old model and retry retraining with the old model's parameters as initialization (warm start).
+Action: if either check fails, keep the old model and retry retraining with the old model's parameters as initialization (warm start). Maximum 2 retry attempts. If both fail, see Section 7.3.1 for the forced-switch protocol.
+
+### 7.3.1 Open Position Handling During Model Retraining
+
+When a retraining event occurs (monthly or triggered by anomaly):
+
+- **If Stability ≥ 90% (model switches cleanly):** No position action required. New regime signals take effect for new entries only; existing positions carry their original entry rationale until their natural exit condition is met.
+- **If Stability < 90% (warm-start retry):** During the retry window, the old model remains active. All position sizing uses old model signals. New entries are paused until stability is confirmed or the retry is completed (maximum 2 retry attempts).
+- **If retry fails twice:** Force switch to the new model regardless of stability score. Log a "forced model switch" event. For any open positions flagged as size > 50% of max allowed, reduce to 50% of current size as a precautionary hedge until the new model stabilizes over the next 5 trading days.
+- **Cold start (first model):** No prior model exists; use K-means label assignment (by RV rank) as the reference "old model" for stability comparison.
 
 ### 7.4 Smoothing the Regime Signal
 
@@ -430,6 +457,8 @@ XGBoost receives the same 5 features as the HMM, plus derived features that expl
 - sign(ΔVol) × VIX: Signed directional signal.
 
 Total features for XGBoost: 9 (5 primary + 4 derived).
+
+**Validation requirement:** Before including derived features in production, verify that each improves out-of-sample Brier score by > 2% vs the base 5 features alone (measured on the held-out validation set from Section 12.1). Use built-in XGBoost feature importance (gain metric); features with gain < 0.01 are dropped. The derived features above were selected based on financial intuition — empirical validation determines which survive. Note that `sign(ΔVol) × VIX` introduces a discontinuity at ΔVol = 0; XGBoost handles this via splits but the feature may add noise near the boundary.
 
 ### 8.4 Inference
 
@@ -522,6 +551,8 @@ For options trading, the regime signal modulates the EPGP confidence filter as f
 
 ### 10.2 Crypto-Specific Regime Characteristics
 
+**Note:** The RV ranges below are heuristic estimates based on BTC price data circa 2019–2024 (source: Binance BTCUSDT daily OHLCV). Crypto volatility regimes have shifted over time; the HMM will learn the boundaries appropriate to the training period. These ranges serve as initialization guidance only.
+
 **LV:** BTC RV ≈ 20-40% (crypto "calm" is equity "stressed"), funding rate near zero and stable, low dispersion. Typically during ranging/accumulation phases.
 
 **NV:** BTC RV ≈ 40-70%, funding rate mildly positive or negative, moderate dispersion. Typical trending markets with reasonable leverage.
@@ -587,12 +618,14 @@ The second and third rows — sensor disagreement — are the most interesting c
 
 ### 11.3 Latency Analysis
 
-| Event Type | HMM Detection Latency | EPGP Detection Latency | Which Detects First? |
+**Important: The estimates below are unvalidated hypotheses based on the structural properties of each signal. They have NOT been confirmed by backtesting. Section 19.2 (Phase 3 Roadmap) specifies the empirical validation procedure. Treat these as experimental predictions, not established facts.**
+
+| Event Type | HMM Detection Latency | EPGP Detection Latency | Which Detects First? (Hypothesis) |
 |------------|----------------------|----------------------|---------------------|
 | Gradual vol increase | 5-15 days (features change slowly) | 3-7 days (vol surface distortion appears earlier) | EPGP (hypothesis) |
-| Sudden crash (gap event) | 1-2 days (VIX spikes immediately) | 1 day (current snapshot is distorted) | Simultaneous |
+| Sudden crash (gap event) | 1-2 days (VIX spikes immediately) | 1 day (current snapshot is distorted) | Simultaneous (hypothesis) |
 | Liquidity withdrawal | 5-10 days (may not show in VIX initially) | 1-3 days (bid-ask widening distorts PDE fit) | EPGP (hypothesis) |
-| Sentiment shift (no vol change) | 3-5 days (features like TS slope react) | Not detected (PDE structure unchanged) | HMM only |
+| Sentiment shift (no vol change) | 3-5 days (features like TS slope react) | Not detected (PDE structure unchanged) | HMM only (hypothesis) |
 | Slow structural change | 10-20 days (gradual statistical drift) | 5-10 days (cumulative PDE residual) | EPGP (hypothesis) |
 
 These latency estimates are hypotheses to be validated in Phase 3 backtesting.
